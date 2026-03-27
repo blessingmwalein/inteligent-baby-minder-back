@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions  ChatSession[]
+}
+
+model DecisionTreeNode {
+  id              String             @id @default(uuid())
+  type            String             // 'CRY', 'FACE', 'SKIN'
+  question        String             // e.g. "What does the cry sound like?"
+  depth           Int
+  isLeaf          Boolean            @default(false)
+  
+  ConditionResponse ConditionResponse?
+  
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  
+  // Self-referencing relationship for tree structure
+  parentId        String?
+  parent          DecisionTreeNode?  @relation("NodeHierarchy", fields: [parentId], references: [id])
+  children        DecisionTreeNode[] @relation("NodeHierarchy")
+
+  // Which answer / keyword leads to this node
+  triggerKeyword  String?            // e.g. "HIGH_PITCH", "RED_SPOTS"
+}
+
+model ConditionResponse {
+  id               String            @id @default(uuid())
+  advice           String            // e.g. "The baby might have colic. Try burping them."
+  triageLevel      String            // e.g. "'NORMAL', 'CONSULT_DOCTOR', 'URGENT'"
+  
+  nodeId           String            @unique
+  node             DecisionTreeNode  @relation(fields: [nodeId], references: [id])
+}
+
+model ChatSession {
+  id               String            @id @default(uuid())
+  currentStateNode String?           // ID of the current DecisionTreeNode the user is at
+  flowType         String            // 'CRY', 'FACE', 'SKIN' or 'UNKNOWN'
+  
+  userId           String?
+  user             User?             @relation(fields: [userId], references: [id])
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
