@@ -16,6 +16,7 @@ All endpoints below are prefixed with `/api`.
 
 **Endpoint**: `POST /api/nlp/intent`  
 **Description**: Analyzes raw text using rule-based algorithms to detect the core infant issue (CRY, FACE, SKIN, UNKNOWN).
+Also detects GREETING for simple hello/hi messages.
 
 **Request Body:**
 ```json
@@ -50,6 +51,26 @@ All endpoints below are prefixed with `/api`.
   "question": "Is the baby crying continuously for more than 3 hours a day?",
   "isFinal": false,
   "nodeId": "1111-2222-3333"
+}
+```
+
+**Response (If intent is UNKNOWN):**
+```json
+{
+  "sessionId": null,
+  "isFinal": true,
+  "advice": "I could not confidently identify the issue. Please describe the baby's cues in more detail or choose CRY, FACE, or SKIN when prompted.",
+  "triageLevel": "NORMAL"
+}
+```
+
+**Response (If intent is GREETING):**
+```json
+{
+  "sessionId": null,
+  "isFinal": true,
+  "advice": "Hi there. Tell me about the baby's cry, facial expression, or skin issue, and I will guide you.",
+  "triageLevel": "NORMAL"
 }
 ```
 

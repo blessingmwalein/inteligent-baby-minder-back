@@ -5,6 +5,7 @@ export enum IntentOutput {
   CRY = 'CRY',
   FACE = 'FACE',
   SKIN = 'SKIN',
+  GREETING = 'GREETING',
   UNKNOWN = 'UNKNOWN',
 }
 
@@ -19,11 +20,24 @@ export class NlpService {
   }
 
   private trainModel() {
+    this.classifier.addDocument('hello', IntentOutput.GREETING);
+    this.classifier.addDocument('hi', IntentOutput.GREETING);
+    this.classifier.addDocument('hey', IntentOutput.GREETING);
+    this.classifier.addDocument('good morning', IntentOutput.GREETING);
+    this.classifier.addDocument('good afternoon', IntentOutput.GREETING);
+    this.classifier.addDocument('good evening', IntentOutput.GREETING);
+    this.classifier.addDocument('greetings', IntentOutput.GREETING);
+
     this.classifier.addDocument('baby is crying loudly', IntentOutput.CRY);
+    this.classifier.addDocument('crying', IntentOutput.CRY);
+    this.classifier.addDocument('baby crying', IntentOutput.CRY);
+    this.classifier.addDocument('cry', IntentOutput.CRY);
     this.classifier.addDocument('high pitched wail', IntentOutput.CRY);
     this.classifier.addDocument('colic cry', IntentOutput.CRY);
     this.classifier.addDocument('wailing and screaming', IntentOutput.CRY);
     this.classifier.addDocument('fussing and whimpering', IntentOutput.CRY);
+    this.classifier.addDocument('screaming', IntentOutput.CRY);
+    this.classifier.addDocument('wailing', IntentOutput.CRY);
 
     this.classifier.addDocument('red face', IntentOutput.FACE);
     this.classifier.addDocument('frowning and grimacing', IntentOutput.FACE);
@@ -44,7 +58,7 @@ export class NlpService {
     const topResult = classification[0];
 
     // Threshold ensures we don't return random guessing as confident
-    if (topResult && topResult.value > 0.5) {
+    if (topResult && topResult.value > 0.3) {
       return topResult.label as IntentOutput;
     }
 
@@ -70,7 +84,7 @@ export class NlpService {
           body: JSON.stringify({
             inputs: message,
             parameters: {
-              candidate_labels: ['infant cry', 'facial expression', 'skin condition', 'other'],
+              candidate_labels: ['infant cry', 'facial expression', 'skin condition', 'greeting', 'other'],
             },
           }),
         },
@@ -87,6 +101,7 @@ export class NlpService {
             case 'infant cry': return IntentOutput.CRY;
             case 'facial expression': return IntentOutput.FACE;
             case 'skin condition': return IntentOutput.SKIN;
+            case 'greeting': return IntentOutput.GREETING;
           }
         }
       }

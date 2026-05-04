@@ -6,7 +6,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 const StartChatSchema = z.object({
-  flowType: z.enum(['CRY', 'FACE', 'SKIN', 'UNKNOWN']),
+  flowType: z.enum(['CRY', 'FACE', 'SKIN', 'UNKNOWN', 'GREETING']),
 });
 export class StartChatDto extends createZodDto(StartChatSchema) {}
 

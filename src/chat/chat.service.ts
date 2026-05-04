@@ -6,6 +6,26 @@ export class ChatService {
   constructor(private readonly prisma: PrismaService) {}
 
   async startChat(flowType: string, userId?: string) {
+    if (flowType === 'GREETING') {
+      return {
+        sessionId: null,
+        isFinal: true,
+        advice:
+          'Hi there. Tell me about the baby\'s cry, facial expression, or skin issue, and I will guide you.',
+        triageLevel: 'NORMAL',
+      };
+    }
+
+    if (flowType === 'UNKNOWN') {
+      return {
+        sessionId: null,
+        isFinal: true,
+        advice:
+          'I could not confidently identify the issue. Please describe the baby\'s cues in more detail or choose CRY, FACE, or SKIN when prompted.',
+        triageLevel: 'NORMAL',
+      };
+    }
+
     const rootNode = await this.prisma.decisionTreeNode.findFirst({
       where: {
         type: flowType,
