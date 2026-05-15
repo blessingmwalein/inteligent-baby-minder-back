@@ -1,37 +1,82 @@
-import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
 import { ChatService } from './chat.service';
+import { SendMessageDto } from './dto/chat.dto';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
-
-const StartChatSchema = z.object({
-  flowType: z.enum(['CRY', 'FACE', 'SKIN', 'UNKNOWN', 'GREETING']),
-});
-export class StartChatDto extends createZodDto(StartChatSchema) {}
-
-const AnswerChatSchema = z.object({
-  sessionId: z.string().uuid('Invalid session ID format'),
-  answer: z.string().trim().min(1, 'Answer is required'),
-});
-export class AnswerChatDto extends createZodDto(AnswerChatSchema) {}
 
 @ApiTags('Chat')
-@Controller('chat')
+@Controller('chat/sessions')
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Start a new chat session (Optional Auth)' })
+  @ApiOperation({ summary: 'Create a new chat session (auth optional)' })
   @UseGuards(OptionalJwtAuthGuard)
-  @Post('start')
-  async start(@Body() body: StartChatDto, @Request() req: any) {
-    return this.chatService.startChat(body.flowType, req.user?.userId);
+  @Post()
+  async createSession(@Request() req: any) {
+    return this.chatService.createSession(req.user?.userId);
   }
 
-  @ApiOperation({ summary: 'Answer the current chat node' })
-  @Post('answer')
-  async answer(@Body() body: AnswerChatDto) {
-    return this.chatService.answerChat(body.sessionId, body.answer);
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List the authenticated user\'s chat sessions' })
+  @UseGuards(AuthGuard('jwt'))
+  @Get()
+  async listSessions(@Request() req: any) {
+    return this.chatService.listSessions(req.user.userId);
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Fetch a session\'s message history (auth optional)' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get(':id/messages')
+  async getMessages(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Request() req: any,
+  ) {
+    return this.chatService.getMessages(id, req.user?.userId);
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Send a user message; safety filter → Gemini → assistant reply',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @UseGuards(OptionalJwtAuthGuard)
+  @Post(':id/messages')
+  async sendMessage(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: SendMessageDto,
+    @Request() req: any,
+  ) {
+    return this.chatService.sendMessage(id, body.content, req.user?.userId);
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete a chat session and its messages' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @UseGuards(OptionalJwtAuthGuard)
+  @Delete(':id')
+  async deleteSession(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Request() req: any,
+  ) {
+    return this.chatService.deleteSession(id, req.user?.userId);
   }
 }

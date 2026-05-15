@@ -18,44 +18,93 @@ model User {
   sessions  ChatSession[]
 }
 
+// Legacy decision-tree models. Retained for one release to avoid destructive migration.
+// They are not referenced by the new chat flow and will be dropped in a follow-up migration.
 model DecisionTreeNode {
   id              String             @id @default(uuid())
-  type            String             // 'CRY', 'FACE', 'SKIN'
-  question        String             // e.g. "What does the cry sound like?"
+  type            String
+  question        String
   depth           Int
   isLeaf          Boolean            @default(false)
-  
+
   ConditionResponse ConditionResponse?
-  
+
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
-  
-  // Self-referencing relationship for tree structure
+
   parentId        String?
   parent          DecisionTreeNode?  @relation("NodeHierarchy", fields: [parentId], references: [id])
   children        DecisionTreeNode[] @relation("NodeHierarchy")
 
-  // Which answer / keyword leads to this node
-  triggerKeyword  String?            // e.g. "HIGH_PITCH", "RED_SPOTS"
+  triggerKeyword  String?
 }
 
 model ConditionResponse {
   id               String            @id @default(uuid())
-  advice           String            // e.g. "The baby might have colic. Try burping them."
-  triageLevel      String            // e.g. "'NORMAL', 'CONSULT_DOCTOR', 'URGENT'"
-  
+  advice           String
+  triageLevel      String
+
   nodeId           String            @unique
   node             DecisionTreeNode  @relation(fields: [nodeId], references: [id])
 }
 
 model ChatSession {
-  id               String            @id @default(uuid())
-  currentStateNode String?           // ID of the current DecisionTreeNode the user is at
-  flowType         String            // 'CRY', 'FACE', 'SKIN' or 'UNKNOWN'
-  
-  userId           String?
-  user             User?             @relation(fields: [userId], references: [id])
+  id                String         @id @default(uuid())
+  // Legacy column kept nullable for back-compat; will be dropped with decision-tree tables.
+  currentStateNode  String?
+  flowType          String?
+  // New columns
+  topic             String?
+  title             String?
+  lastTriageLevel   String?
 
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  userId            String?
+  user              User?          @relation(fields: [userId], references: [id])
+
+  messages          ChatMessage[]
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+enum Role {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model ChatMessage {
+  id           String       @id @default(uuid())
+  sessionId    String
+  session      ChatSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  role         Role
+  content      String
+
+  triageLevel  String?
+  tokensIn     Int?
+  tokensOut    Int?
+  modelName    String?
+  latencyMs    Int?
+  safetyOverride Boolean    @default(false)
+  degraded     Boolean      @default(false)
+
+  createdAt    DateTime     @default(now())
+
+  @@index([sessionId, createdAt])
+}
+
+// Curated pediatric advice corpus injected into the system prompt.
+// Replaces the rigid decision-tree node + condition-response shape.
+model AdviceReference {
+  id           String   @id @default(uuid())
+  topic        String   // e.g. "crying", "rash", "feeding"
+  description  String   // short trigger / scenario summary
+  advice       String   // guidance text the LLM can paraphrase
+  triageLevel  String   // NORMAL | CONSULT_DOCTOR | URGENT | EMERGENCY
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([topic])
 }

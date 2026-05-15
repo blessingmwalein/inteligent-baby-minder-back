@@ -1,177 +1,170 @@
-# Intelligent Baby Minder Backend - API Examples
+# Intelligent Baby Minder Backend — API Examples (v2)
 
 ## Base URLs
 
 - Dev (local): `http://localhost:3000`
 - Prod: `http://31.220.82.129:5002`
 
-All endpoints below are prefixed with `/api`.
+All endpoints are prefixed with `/api`.
 
-## Authentication Notes
+## Authentication
 
-- Auth is optional for chat. Guest users can start chat sessions without a token.
-- When authenticated, include the JWT in the `Authorization` header: `Bearer <token>`.
+- Auth is **optional** for most chat endpoints. Guest users can create sessions and chat without a token.
+- Listing all your sessions (`GET /api/chat/sessions`) requires a JWT.
+- Send the JWT in the `Authorization` header: `Bearer <token>`.
 
-## 1. NLP Intent Detection
+## Breaking changes from v1
 
-**Endpoint**: `POST /api/nlp/intent`  
-**Description**: Analyzes raw text using rule-based algorithms to detect the core infant issue (CRY, FACE, SKIN, UNKNOWN).
-Also detects GREETING for simple hello/hi messages.
+The decision-tree endpoints (`POST /api/nlp/intent`, `POST /api/chat/start`, `POST /api/chat/answer`) are **removed**. They are replaced by a single conversational endpoint backed by Google Gemini.
 
-**Request Body:**
-```json
-{
-  "message": "The baby is making a high pitched wail and pulling legs up."
-}
-```
+## 1. Create a chat session
 
-**Response:**
-```json
-{
-  "intent": "CRY"
-}
-```
+**`POST /api/chat/sessions`** (auth optional)
 
-## 2. Start Chat Session (Optional Auth)
-
-**Endpoint**: `POST /api/chat/start`  
-**Description**: Initializes a new decision tree flow for a specific intent type. Works in guest mode or with JWT.
-
-**Request Body:**
-```json
-{
-  "flowType": "CRY"
-}
-```
-
-**Response:**
+**Response**:
 ```json
 {
   "sessionId": "a1b2c3d4-e5f6-...",
-  "question": "Is the baby crying continuously for more than 3 hours a day?",
-  "isFinal": false,
-  "nodeId": "1111-2222-3333"
+  "greeting": "Hi! I'm Baby Minder. Tell me what's happening with your little one...",
+  "createdAt": "2026-05-15T10:00:00.000Z"
 }
 ```
 
-**Response (If intent is UNKNOWN):**
+## 2. Send a message
+
+**`POST /api/chat/sessions/:id/messages`** (auth optional)
+
+Runs the safety pre-filter, then Gemini, then the safety post-filter. Persists both the user message and the assistant reply.
+
+**Request**:
+```json
+{ "content": "My baby has had a red rash on her cheek for two days." }
+```
+
+**Response**:
 ```json
 {
-  "sessionId": null,
-  "isFinal": true,
-  "advice": "I could not confidently identify the issue. Please describe the baby's cues in more detail or choose CRY, FACE, or SKIN when prompted.",
-  "triageLevel": "NORMAL"
+  "messageId": "uuid",
+  "reply": "That sounds uncomfortable. A short-lived red patch on the cheek is often eczema or contact irritation...",
+  "triageLevel": "CONSULT_DOCTOR",
+  "followUpQuestions": [
+    "Is the rash dry and rough, or wet and weeping?",
+    "Has she had any fever?"
+  ],
+  "topic": "skin",
+  "safetyOverride": false,
+  "degraded": false
 }
 ```
 
-**Response (If intent is GREETING):**
+**Safety override example** — a message containing a red-flag phrase bypasses Gemini:
+```bash
+curl -X POST .../api/chat/sessions/$ID/messages \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"My baby is not breathing"}'
+```
+Response includes `"safetyOverride": true` and `"triageLevel": "EMERGENCY"`.
+
+## 3. Fetch a session's message history
+
+**`GET /api/chat/sessions/:id/messages`** (auth optional)
+
 ```json
 {
-  "sessionId": null,
-  "isFinal": true,
-  "advice": "Hi there. Tell me about the baby's cry, facial expression, or skin issue, and I will guide you.",
-  "triageLevel": "NORMAL"
+  "sessionId": "uuid",
+  "messages": [
+    { "id": "...", "role": "USER", "content": "...", "createdAt": "..." },
+    { "id": "...", "role": "ASSISTANT", "content": "...", "triageLevel": "NORMAL", "createdAt": "..." }
+  ]
 }
 ```
 
-## 3. Answer Chat Session
+## 4. List your sessions
 
-**Endpoint**: `POST /api/chat/answer`  
-**Description**: Continues the chat flow based on user input, returning the next question or final triage advice.
+**`GET /api/chat/sessions`** (auth **required**)
 
-**Request Body:**
 ```json
-{
-  "sessionId": "a1b2c3d4-e5f6-...",
-  "answer": "yes"
-}
+[
+  {
+    "id": "uuid",
+    "topic": "rash",
+    "title": null,
+    "lastTriageLevel": "CONSULT_DOCTOR",
+    "createdAt": "...",
+    "updatedAt": "..."
+  }
+]
 ```
 
-**Response (Continuing flow):**
+## 5. Delete a session
+
+**`DELETE /api/chat/sessions/:id`** (auth optional for anonymous sessions; required if the session has an owner)
+
 ```json
-{
-  "isFinal": false,
-  "question": "Does the baby pull their legs to their stomach or clench their fists?",
-  "nodeId": "5555-6666-7777"
-}
+{ "success": true }
 ```
 
-**Response (Final state reached):**
+## 6. Sign up
+
+**`POST /api/auth/signup`**
+
 ```json
-{
-  "isFinal": true,
-  "advice": "This might be colic. Try gentle rocking, a pacifier, or consult your pediatrician if worried.",
-  "triageLevel": "CONSULT_DOCTOR"
-}
+{ "email": "parent@example.com", "password": "secret123", "name": "Jane Doe" }
 ```
 
-## 4. Sign Up
+→
 
-**Endpoint**: `POST /api/auth/signup`
-**Description**: Creates a new user and returns a JWT access token.
-
-**Request Body:**
-```json
-{
-  "email": "parent@example.com",
-  "password": "secret123",
-  "name": "Jane Doe"
-}
-```
-
-**Response:**
 ```json
 {
   "access_token": "<jwt>",
-  "user": {
-    "id": "a1b2c3d4-e5f6-...",
-    "email": "parent@example.com",
-    "name": "Jane Doe"
-  }
+  "user": { "id": "uuid", "email": "parent@example.com", "name": "Jane Doe" }
 }
 ```
 
-## 5. Login
+## 7. Log in
 
-**Endpoint**: `POST /api/auth/login`
-**Description**: Logs in an existing user and returns a JWT access token.
+**`POST /api/auth/login`**
 
-**Request Body:**
+```json
+{ "email": "parent@example.com", "password": "secret123" }
+```
+
+## 8. Profile
+
+**`GET /api/users/profile`** (auth required)
+
 ```json
 {
-  "email": "parent@example.com",
-  "password": "secret123"
-}
-```
-
-**Response:**
-```json
-{
-  "access_token": "<jwt>",
-  "user": {
-    "id": "a1b2c3d4-e5f6-...",
-    "email": "parent@example.com",
-    "name": "Jane Doe"
-  }
-}
-```
-
-## 6. Get Current User Profile
-
-**Endpoint**: `GET /api/users/profile`
-**Description**: Returns the current authenticated user's profile.
-
-**Headers:**
-```
-Authorization: Bearer <jwt>
-```
-
-**Response:**
-```json
-{
-  "id": "a1b2c3d4-e5f6-...",
+  "id": "uuid",
   "email": "parent@example.com",
   "name": "Jane Doe",
-  "createdAt": "2026-05-04T10:20:30.000Z"
+  "createdAt": "..."
 }
 ```
+
+## Manual verification checklist
+
+```bash
+BASE=http://localhost:3000/api
+
+# Create session
+SID=$(curl -s -X POST $BASE/chat/sessions | jq -r .sessionId)
+
+# Normal message
+curl -s -X POST $BASE/chat/sessions/$SID/messages \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"My baby has been crying for 2 hours"}' | jq
+
+# Safety override
+curl -s -X POST $BASE/chat/sessions/$SID/messages \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"baby is not breathing"}' | jq
+# Expect: safetyOverride=true, triageLevel=EMERGENCY, hardcoded reply.
+
+# History
+curl -s $BASE/chat/sessions/$SID/messages | jq
+```
+
+## Environment variables
+
+See `.env.example`. Required: `DATABASE_URL`, `JWT_SECRET`, `GEMINI_API_KEY`.
