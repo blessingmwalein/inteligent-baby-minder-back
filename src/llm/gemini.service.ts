@@ -46,7 +46,7 @@ export class GeminiService implements OnModuleInit {
 
   async onModuleInit() {
     const apiKey = this.config.getOrThrow<string>('GEMINI_API_KEY');
-    this.modelName = this.config.get<string>('GEMINI_MODEL') ?? 'gemini-2.0-flash';
+    this.modelName = this.config.get<string>('GEMINI_MODEL') ?? 'gemini-2.5-flash';
 
     this.client = new GoogleGenerativeAI(apiKey);
     this.model = this.client.getGenerativeModel({
